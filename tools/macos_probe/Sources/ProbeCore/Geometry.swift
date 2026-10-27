@@ -34,6 +34,29 @@ public struct Rect: Codable, Equatable {
     public func contains(_ point: Point) -> Bool {
         point.x >= x && point.y >= y && point.x < x + width && point.y < y + height
     }
+
+    public func intersects(_ other: Rect) -> Bool {
+        isValid && other.isValid && x < other.x + other.width && x + width > other.x
+            && y < other.y + other.height && y + height > other.y
+    }
+}
+
+public struct WindowLayer {
+    public let id: UInt32
+    public let bounds: Rect
+    public let alpha: Double
+
+    public init(id: UInt32, bounds: Rect, alpha: Double) {
+        self.id = id; self.bounds = bounds; self.alpha = alpha
+    }
+}
+
+public enum WindowOcclusion {
+    /// Input is guarded against overlapping normal windows, not unrelated
+    /// menu labels in the full-screen title area outside the game content.
+    public static func frontmostOverlapping(_ windows: [WindowLayer], target: Rect) -> UInt32? {
+        windows.first { $0.alpha > 0 && $0.bounds.intersects(target) }?.id
+    }
 }
 
 /// Coordinates use the Quartz global top-left origin, including negative display origins.

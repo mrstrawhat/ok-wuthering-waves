@@ -191,4 +191,34 @@ struct ProbeCoreTests {
         #expect(!Rect(x: Double.greatestFiniteMagnitude, y: 0,
                       width: Double.greatestFiniteMagnitude, height: 1).isValid)
     }
+
+    @Test
+    func testFullscreenMenuOutsideContentDoesNotBlockInput() {
+        let game = Rect(x: 0, y: 33, width: 1512, height: 949)
+        let layers = [
+            WindowLayer(id: 1, bounds: .init(x: 6, y: 7, width: 66, height: 20), alpha: 1),
+            WindowLayer(id: 2, bounds: .init(x: 0, y: 33, width: 1512, height: 32), alpha: 0),
+            WindowLayer(id: 3, bounds: game, alpha: 1),
+        ]
+        #expect(WindowOcclusion.frontmostOverlapping(layers, target: game) == 3)
+    }
+
+    @Test
+    func testOverlappingDialogStillBlocksInput() {
+        let layers = [
+            WindowLayer(id: 1, bounds: .init(x: 500, y: 200, width: 50, height: 30), alpha: 1),
+            WindowLayer(id: 17, bounds: window, alpha: 1),
+        ]
+        #expect(WindowOcclusion.frontmostOverlapping(layers, target: window) == 1)
+    }
+
+    @Test
+    func testEdgeTouchAndWindowsBehindGameDoNotBlock() {
+        let layers = [
+            WindowLayer(id: 1, bounds: .init(x: 0, y: 0, width: 100, height: 60), alpha: 1),
+            WindowLayer(id: 17, bounds: window, alpha: 1),
+            WindowLayer(id: 2, bounds: window, alpha: 1),
+        ]
+        #expect(WindowOcclusion.frontmostOverlapping(layers, target: window) == 17)
+    }
 }

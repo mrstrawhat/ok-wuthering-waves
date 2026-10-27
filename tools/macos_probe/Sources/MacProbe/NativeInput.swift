@@ -73,6 +73,7 @@ extension MacProbe {
         let script = try options.script()
         _ = try InputPlan(script: script, mapper: options.mapper(
             bounds: Rect(x: 0, y: 0, width: 1920, height: 1080)))
+        initializeNativeSession()
         let window = try await targetWindow(options)
         let pid = window.owningApplication!.processID
         let initial = try windowState(id: window.windowID, pid: pid)

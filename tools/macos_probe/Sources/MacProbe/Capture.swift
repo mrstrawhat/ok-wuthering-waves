@@ -128,7 +128,8 @@ final class FrameCollector: NSObject, SCStreamOutput, SCStreamDelegate {
         let intervals = zip(arrivals.dropFirst(), arrivals).map { ($0 - $1) * 1000 }
         let span = (arrivals.last ?? 0) - (arrivals.first ?? 0)
         let description = WindowDescription(id: target.windowID, pid: target.owningApplication!.processID,
-                                            bundle: bundle, title: target.title, framePoints: bounds(target.frame))
+                                            bundle: bundle, title: target.title, framePoints: bounds(target.frame),
+                                            onScreen: target.isOnScreen)
         let report = CaptureReport(target: description, captureFramePoints: bounds(filter.contentRect),
             pointPixelScale: Double(filter.pointPixelScale), requestedFPS: fps, elapsedSeconds: elapsed,
             completeFrames: arrivals.count, sampledBlackFrames: blackCount, sampledChangedFrames: changedCount,
@@ -157,6 +158,7 @@ extension MacProbe {
         guard !FileManager.default.fileExists(atPath: directory.path) else {
             throw ProbeError.refused("Output already exists; use a new evidence directory to preserve earlier results")
         }
+        initializeNativeSession()
         let window = try await targetWindow(options)
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()

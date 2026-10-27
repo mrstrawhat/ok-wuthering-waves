@@ -105,6 +105,15 @@ func bounds(_ rect: CGRect) -> Rect {
     Rect(x: rect.origin.x, y: rect.origin.y, width: rect.width, height: rect.height)
 }
 
+@MainActor
+func initializeNativeSession() {
+    // A CLI has no NSApplication lifecycle. Initialize its WindowServer
+    // connection on the main actor before SCK creates a filter or stream.
+    // Prohibited activation keeps this helper from taking focus from the game.
+    NSApplication.shared.setActivationPolicy(.prohibited)
+    _ = NSScreen.screens
+}
+
 func requireScreenPermission() throws {
     guard CGPreflightScreenCaptureAccess() else {
         throw ProbeError.refused("Screen recording permission is missing. Grant it to the host running this tool, then restart that host. This tool never opens permission prompts automatically.")
@@ -122,7 +131,10 @@ func runningApp(_ bundle: String) throws -> NSRunningApplication {
 func targetWindows(_ bundle: String) async throws -> [SCWindow] {
     let app = try runningApp(bundle)
     try requireScreenPermission()
-    let shareable = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+    // Full-screen games live in a separate Space. Capture may target that
+    // window even while the caller is on another desktop; input still uses
+    // windowState's independent visibility and foreground guards.
+    let shareable = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
     return shareable.windows.filter {
         $0.owningApplication?.processID == app.processIdentifier && $0.windowLayer == 0
             && $0.frame.width >= 100 && $0.frame.height >= 100
@@ -148,12 +160,17 @@ func windowState(id: UInt32, pid: Int32) throws -> WindowState {
         throw ProbeError.refused("Target is no longer a visible window of the expected process")
     }
     let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-    let top = list.first {
-        ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0
-            && (($0[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1) > 0
+    let layers = list.compactMap { item -> WindowLayer? in
+        guard (item[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+              let windowID = (item[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+              let dict = item[kCGWindowBounds as String] as? [String: Any],
+              let frame = CGRect(dictionaryRepresentation: dict as CFDictionary) else { return nil }
+        return WindowLayer(id: windowID, bounds: bounds(frame),
+                           alpha: (item[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1)
     }
+    let top = WindowOcclusion.frontmostOverlapping(layers, target: bounds(rect))
     return WindowState(id: id, pid: pid, bounds: bounds(rect), isFrontmost: frontPID == pid,
-                       isTopWindow: (top?[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id)
+                       isTopWindow: top == id)
 }
 
 struct WindowDescription: Codable {
@@ -162,6 +179,7 @@ struct WindowDescription: Codable {
     let bundle: String
     let title: String?
     let framePoints: Rect
+    let onScreen: Bool
 }
 
 let help = """
@@ -186,6 +204,7 @@ Capture does not prove that the game accepts input. Posted events are not accept
 """
 
 @main
+@MainActor
 struct MacProbe {
     static func main() async {
         do {
@@ -194,10 +213,11 @@ struct MacProbe {
             case "help", "--help", "-h": print(help)
             case "status": try status(options)
             case "windows":
+                initializeNativeSession()
                 let windows = try await targetWindows(options.bundle)
                 try emit(windows.map { WindowDescription(id: $0.windowID,
                     pid: $0.owningApplication!.processID, bundle: options.bundle,
-                    title: $0.title, framePoints: bounds($0.frame)) })
+                    title: $0.title, framePoints: bounds($0.frame), onScreen: $0.isOnScreen) })
             case "validate":
                 let mapper = try options.mapper(bounds: Rect(x: 0, y: 0, width: 1920, height: 1080))
                 try emit(InputPlan(script: options.script(), mapper: mapper))
@@ -216,6 +236,7 @@ struct MacProbe {
     }
 
     static func status(_ options: Options) throws {
+        initializeNativeSession()
         struct Display: Codable {
             let appKitFramePoints: Rect
             let quartzFramePoints: Rect?
