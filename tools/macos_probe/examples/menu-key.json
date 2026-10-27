@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "actions": [
+    {"kind": "key", "keys": ["escape"], "durationMs": 100},
+    {"kind": "wait", "durationMs": 300}
+  ]
+}
