@@ -1,0 +1,2 @@
+# Optional packaging environment, separate from the locked runtime.
+pyinstaller>=6.11,<7

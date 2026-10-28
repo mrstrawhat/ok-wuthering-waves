@@ -22,7 +22,7 @@ def test_all_native_registered_task_and_tab_modules_import():
 @pytest.mark.parametrize('setting, expected', [('简体中文', 'zh_CN'), ('繁體中文', 'zh_TW'), ('English', 'en_US')])
 def test_native_language_selection_does_not_depend_on_windows_hwnd(setting, expected):
     task = BaseWWTask.__new__(BaseWWTask)
-    task.executor = SimpleNamespace(config={'macos': {}}, device_manager=SimpleNamespace(hwnd_window=None))
+    task._executor = SimpleNamespace(config={'macos': {}}, device_manager=SimpleNamespace(hwnd_window=None))
     task.executor.config['macos']['bundle_id'] = 'test.game'
     task.get_global_config = lambda name: {'游戏语言': setting}
     assert task.game_lang == expected

@@ -4,7 +4,12 @@ if __name__ == '__main__':
     from pathlib import Path
 
     if sys.platform == 'darwin':
-        os.chdir(Path(__file__).resolve().parent)
+        if getattr(sys, 'frozen', False):
+            data_dir = Path.home() / 'Library' / 'Application Support' / 'OK-WW'
+            data_dir.mkdir(parents=True, exist_ok=True)
+            os.chdir(data_dir)
+        else:
+            os.chdir(Path(__file__).resolve().parent)
     from config import config
     from ok import OK
 

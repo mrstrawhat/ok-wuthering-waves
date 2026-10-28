@@ -125,7 +125,7 @@ def blur_area(width, height):
     return Box(width * 0.879, height * 0.976, blur_width * 0.973, blur_height * 0.994)
 
 
-basic_config_option = create_basic_options(enable_blur=True)
+basic_config_option = create_basic_options(enable_blur=sys.platform != 'darwin')
 
 key_config_option = ConfigOption('Game Hotkey', {
     'Echo Key': 'q',
@@ -296,6 +296,11 @@ config = {
 }
 
 if sys.platform == 'darwin':
+    for key in ('Mute Game while in Background', 'Auto Resize Game Window',
+                'Exit App when Game Exits', 'Use DirectML', 'Kill Launcher After Start', 'Launch with DX11'):
+        basic_config_option.default_config.pop(key, None)
+        basic_config_option.config_type.pop(key, None)
+        basic_config_option.config_description.pop(key, None)
     # Keep Windows settings intact on Windows; never load its launcher or
     # multi-account window automation into the native macOS application.
     config.pop('windows', None)
