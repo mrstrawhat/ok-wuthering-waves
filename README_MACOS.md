@@ -6,6 +6,7 @@
 ## 安装与启动
 
 当前锁定环境：Apple Silicon、macOS 15.2 或更新、Python 3.12。
+本机应用包使用 Homebrew Python 3.12.9 构建。
 把改造后的 `ok-script` 与本项目放在同一个父目录：
 
 ```text
@@ -38,7 +39,8 @@ F9（可配置为 F10/F11/F12）控制开始/暂停。全局快捷键另需输�
 .venv/bin/python scripts/build_macos.py
 ```
 
-输出 `dist/OK-WW.app`。构建配置已提供；打包和应用包首次权限仍待集中验证，当前没有已公证的发布包。
+输出 `dist/OK-WW.app` 和 `dist/build-info.json`（解释器及两仓库代码版本）。
+本地产物使用临时签名，尚未进行 Apple 公证；首次权限与游戏控制仍需集中验收。
 
 ## 当前边界
 

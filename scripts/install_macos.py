@@ -2,10 +2,11 @@
 import argparse
 import os
 from pathlib import Path
-import platform
 import subprocess
 import sys
 import venv
+
+from macos_runtime import require_supported_python
 
 
 def main():
@@ -13,8 +14,7 @@ def main():
     parser.add_argument('--offline', action='store_true', help='只使用本地安装包缓存')
     parser.add_argument('--wheel-dir', type=Path)
     args = parser.parse_args()
-    if sys.platform != 'darwin' or platform.machine() != 'arm64' or sys.version_info[:2] != (3, 12):
-        parser.error('当前锁定环境需要 Apple Silicon Mac 和 Python 3.12。')
+    require_supported_python()
     root = Path(__file__).resolve().parents[1]
     framework = root.parent / 'ok-script'
     if not (framework / 'ok/device/capture_methods/macos.py').is_file():
@@ -22,9 +22,9 @@ def main():
     python = root / '.venv/bin/python'
     if not python.is_file():
         venv.EnvBuilder(with_pip=True).create(root / '.venv')
-    version = subprocess.check_output([str(python), '-c',
-        'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'], text=True).strip()
-    if version != '3.12':
+    version = tuple(map(int, subprocess.check_output([str(python), '-c',
+        'import sys; print(".".join(map(str, sys.version_info[:3])))'], text=True).strip().split('.')))
+    if version[:2] != (3, 12):
         parser.error('现有 .venv 不是 Python 3.12；请先另存旧环境，再重新安装。')
     command = [str(python), '-m', 'pip', 'install', '-r', 'requirements-macos.lock.txt']
     wheels = args.wheel_dir or root.parent / '.dependency-wheels'
