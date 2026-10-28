@@ -975,6 +975,10 @@ class BaseWWTask(BaseTask):
 
     @property
     def game_lang(self):
+        if self.executor.config.get('macos'):
+            settings = self.get_global_config('Mac 游戏设置')
+            return {'简体中文': 'zh_CN', '繁體中文': 'zh_TW', 'English': 'en_US'}.get(
+                settings.get('游戏语言'), 'zh_CN')
         if '鸣潮' in self.hwnd_title or self.is_browser():
             return 'zh_CN'
         elif 'Wuthering' in self.hwnd_title:

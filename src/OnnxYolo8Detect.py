@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import time
 from typing import Tuple
@@ -41,10 +42,10 @@ class OnnxYolo8Detect:  # Renamed class
 
         # Prioritize DirectML, then CUDA, then CPU
         providers = []
-        if og.use_dml and 'DmlExecutionProvider' in available_providers:
+        if sys.platform == 'win32' and og.use_dml and 'DmlExecutionProvider' in available_providers:
             logger.info("Attempting to use DirectML Execution Provider.")
             providers.append(('DmlExecutionProvider', {'device_id': 0}))
-        elif 'CUDAExecutionProvider' in available_providers:
+        elif sys.platform != 'darwin' and 'CUDAExecutionProvider' in available_providers:
             logger.info("Attempting to use CUDA Execution Provider.")
             providers.append(('CUDAExecutionProvider', {'device_id': 0}))
 
@@ -62,6 +63,9 @@ class OnnxYolo8Detect:  # Renamed class
             model_input_shape = self.session.get_inputs()[0].shape  # e.g., [1, 3, 640, 640] for NCHW
             self.model_actual_input_h = model_input_shape[2]
             self.model_actual_input_w = model_input_shape[3]
+            if isinstance(self.model_actual_input_h, int) and isinstance(self.model_actual_input_w, int):
+                self.preprocess_target_h = self.model_actual_input_h
+                self.preprocess_target_w = self.model_actual_input_w
 
             if self.preprocess_target_h != self.model_actual_input_h or \
                     self.preprocess_target_w != self.model_actual_input_w:
@@ -130,16 +134,7 @@ class OnnxYolo8Detect:  # Renamed class
         scores = []
         class_ids = []
 
-        # The 'gain' calculation below replicates the logic from the original OpenVINO-based code.
-        # In the original code, self.input_width stored model height, and self.input_height stored model width.
-        # The gain was calculated as: min(variable_storing_width / original_image_height, variable_storing_height / original_image_width).
-        # To replicate this with current variable names (where preprocess_target_h is height, preprocess_target_w is width):
-        # gain = min(self.preprocess_target_w / orig_shape[0], self.preprocess_target_h / orig_shape[1])
-        # This calculation for 'gain' might be incorrect if orig_shape is (height, width) as it would mix width/height ratios.
-        # A more standard gain calculation would be:
-        # gain = min(self.preprocess_target_h / orig_shape[0], self.preprocess_target_w / orig_shape[1])
-        # However, to adhere to "do not fix bugs", the original logic is replicated.
-        gain = min(self.preprocess_target_w / orig_shape[0], self.preprocess_target_h / orig_shape[1])
+        gain = min(self.preprocess_target_h / orig_shape[0], self.preprocess_target_w / orig_shape[1])
 
         # Adjust detections for padding
         # padding is (pad_top, pad_left)
@@ -179,7 +174,11 @@ class OnnxYolo8Detect:  # Renamed class
 
             for i in indices_flat:
                 box = boxes[i]
-                box_obj = Box(box[0], box[1], box[2], box[3])
+                left, top = max(0, box[0]), max(0, box[1])
+                right, bottom = min(orig_shape[1], box[0] + box[2]), min(orig_shape[0], box[1] + box[3])
+                if right <= left or bottom <= top:
+                    continue
+                box_obj = Box(left, top, right - left, bottom - top)
                 box_obj.name = self.dic_labels.get(int(class_ids[i]), 'unknown')
                 box_obj.confidence = scores[i]
                 results.append(box_obj)
@@ -204,4 +203,6 @@ class OnnxYolo8Detect:  # Renamed class
             return sort_boxes(boxes)  # Assuming sort_boxes is available
         except Exception as e:
             logger.error(f'ONNX Runtime yolo detect error: {e}')
+            if sys.platform == 'darwin':
+                raise RuntimeError('声骸模型推理失败，任务已停止，请检查日志。') from e
             return []

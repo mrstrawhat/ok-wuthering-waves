@@ -1,4 +1,5 @@
 import os.path
+import threading
 
 import cv2
 
@@ -11,13 +12,20 @@ class Globals:
 
     def __init__(self, exit_event):
         self._yolo_model = None
+        self._yolo_lock = threading.Lock()
         self.mini_map_arrow = None
         self.logged_in = False
 
     @property
     def yolo_model(self):
+        with self._yolo_lock:
+            return self._load_yolo_model()
+
+    def _load_yolo_model(self):
         if self._yolo_model is None:
             weights = get_path_relative_to_exe(os.path.join("assets", "echo_model", "echo.onnx"))
+            if not os.path.isfile(weights):
+                raise FileNotFoundError(f'缺少声骸识别模型，请恢复项目素材：{weights}')
             if og.config.get("ocr").get("params").get("use_openvino"):
                 logger.info("yolo_model Using OpenVinoYolo8Detect")
                 from src.OpenVinoYolo8Detect import OpenVinoYolo8Detect

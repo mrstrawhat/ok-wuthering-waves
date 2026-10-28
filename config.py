@@ -304,6 +304,10 @@ if sys.platform == 'darwin':
     config.pop('blur_area', None)  # Current live overlay is Win32-only.
     config['use_overlay'] = False
     config['macos'] = {'bundle_id': 'com.kurogame.mingchao', 'name': '鸣潮', 'interaction': 'Pynput'}
+    config['global_configs'].append(ConfigOption(
+        'Mac 游戏设置', {'游戏语言': '简体中文'},
+        config_type={'游戏语言': {'type': 'drop_down', 'options': ['简体中文', '繁體中文', 'English']}},
+        description='选择与游戏内相同的语言，用于匹配文字和图标。', show_at_tab=True, icon=Icon.GAME))
     config['ocr']['params'].update(use_openvino=False, use_npu=False)
     config['supported_resolution']['ratio'] = None
     config['template_matching']['feature_scales'] = {
