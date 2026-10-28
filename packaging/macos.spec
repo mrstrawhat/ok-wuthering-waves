@@ -15,6 +15,7 @@ for package in ('ok-script', 'onnxocr-ppocrv5', 'onnxruntime', 'pyappify', 'pynp
 hidden += collect_submodules('src', filter=lambda name: not any(
     excluded in name for excluded in ('MultiAccount', 'MouseResetTask', 'OpenVinoYolo8Detect')))
 hidden += collect_submodules('ok.ui.qt')
+hidden += ['ok.gui', 'ok.gui.util.pyappify_startup']
 hidden += ['AppKit', 'ApplicationServices', 'Quartz', 'ScreenCaptureKit', 'onnxruntime', 'pynput.keyboard._darwin',
            'pynput.mouse._darwin', 'ok.device.capture_methods.macos',
            'ok.device.interaction_methods.macos']

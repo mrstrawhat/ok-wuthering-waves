@@ -25,10 +25,10 @@ from qfluentwidgets import (
 )
 
 from ok import Logger, og
-from ok.gui.tasks.EditTaskTab import CodeEditor
-from ok.gui.tasks.PythonHighlighter import PythonHighlighter
-from ok.gui.util.app import show_info_bar
-from ok.gui.widget.CustomTab import CustomTab
+from ok.ui.qt.tasks.EditTaskTab import CodeEditor
+from ok.ui.qt.tasks.PythonHighlighter import PythonHighlighter
+from ok.ui.qt.util.app import show_info_bar
+from ok.ui.qt.widget.CustomTab import CustomTab
 from src.char.CharFactory import apply_team_char_classes, char_dict
 from src.char.CustomCharLoader import (
     TEAM_CODE_MODE_BUILTIN, TEAM_CODE_MODE_IMPORT, TEAM_CODE_STATE_NONE,
