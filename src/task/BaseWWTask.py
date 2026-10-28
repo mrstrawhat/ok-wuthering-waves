@@ -1,5 +1,6 @@
 import math
 import re
+import sys
 import time
 from datetime import datetime, timedelta
 from typing import List
@@ -716,9 +717,33 @@ class BaseWWTask(BaseTask):
 
     def ensure_main(self, esc=True, time_out=30):
         self.info_set('current task', f'wait main esc={esc}')
-        if not self.logged_in:
+        if sys.platform == 'darwin':
+            # A missing HUD match must not toggle the terminal for ten minutes.
+            # Keep login handling, but bound recovery and preserve the failing
+            # frame so a display/layout mismatch can be diagnosed.
+            time_out = min(time_out, 30)
+            esc_count = 0
+
+            def check_main():
+                nonlocal esc_count
+                if self.is_main(esc=False):
+                    return True
+                if esc and esc_count < 2:
+                    esc_count += 1
+                    self.back(after_sleep=2)
+                    if esc_count == 2:
+                        self.log_info('Esc 恢复已达两次，停止按键，仅等待主界面识别。')
+                return False
+        else:
+            check_main = lambda: self.is_main(esc=esc)
+        if sys.platform != 'darwin' and not self.logged_in:
             time_out = 600
-        if not self.wait_until(lambda: self.is_main(esc=esc), time_out=time_out, raise_if_not_found=False):
+        if not self.wait_until(check_main, time_out=time_out, raise_if_not_found=False):
+            if sys.platform == 'darwin':
+                self.screenshot('main_world_timeout')
+                raise CannotFindException(
+                    '未识别到大世界角色栏；已停止 Esc 恢复（最多两次）。'
+                    '请回到大世界，检查截图、界面缩放与角色快捷键设置后重试。')
             raise Exception('Please start in game world and in team!')
         self.sleep(0.5)
         self.info_set('current task', f'in main esc={esc}')
