@@ -174,7 +174,7 @@ class TacetEliminationTask(WWOneTimeTask, BaseWWTask):
         # The event's drag control reads the real cursor during a drag.
         # Normal event buttons continue to use the configured interaction.
         interaction = self.executor.interaction
-        if hasattr(interaction, 'hwnd_window'):
+        if not self.executor.config.get('macos') and hasattr(interaction, 'hwnd_window'):
             interaction.hwnd_window.bring_to_front()
             drag = PynputInteraction(interaction.capture, interaction.hwnd_window)
             drag.swipe(int(first[0] * self.width), int(first[1] * self.height),

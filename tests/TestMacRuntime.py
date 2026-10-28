@@ -9,6 +9,7 @@ import pytest
 from config import config
 from src.OnnxYolo8Detect import OnnxYolo8Detect
 from src.task.BaseWWTask import BaseWWTask
+from src.task.TacetEliminationTask import TacetEliminationTask
 
 
 @pytest.mark.skipif(sys.platform != 'darwin', reason='native macOS application registry')
@@ -51,3 +52,12 @@ def test_model_uses_cpu_and_actual_model_dimensions_on_mac():
         model = OnnxYolo8Detect('fixture.onnx')
     assert create.call_args.kwargs['providers'] == ['CPUExecutionProvider']
     assert (model.preprocess_target_h, model.preprocess_target_w) == (320, 640)
+
+
+def test_event_drag_keeps_guarded_native_interaction():
+    interaction = Mock()
+    task = SimpleNamespace(executor=SimpleNamespace(config={'macos': {'bundle_id': 'test.game'}},
+                                                    interaction=interaction), swipe_relative=Mock())
+    TacetEliminationTask.drag_relative(task, (.3, .4), (.5, .6))
+    task.swipe_relative.assert_called_once_with(.3, .4, .5, .6, duration=.6)
+    interaction.hwnd_window.bring_to_front.assert_not_called()

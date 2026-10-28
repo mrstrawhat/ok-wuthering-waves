@@ -6,6 +6,7 @@ import os
 from ok import FindFeature, Logger
 from ok.feature.Box import get_bounding_box
 from ok.util.file import clear_folder
+from ok.util.explorer import open_explorer_folder
 from src.scene.WWScene import WWScene
 from src.task.BaseWWTask import BaseWWTask
 
@@ -82,7 +83,7 @@ class EnhanceEchoTask(BaseWWTask, FindFeature):
                               notify=True)
                 if self.info_get('成功声骸数量') >= 1:
                     try:
-                        os.startfile(os.path.abspath("screenshots"))
+                        open_explorer_folder(os.path.abspath("screenshots"))
                     except Exception as e:
                         self.log_error(f"无法打开截图文件夹: {e}")
                 return

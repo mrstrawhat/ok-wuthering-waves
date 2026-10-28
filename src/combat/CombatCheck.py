@@ -231,22 +231,18 @@ class CombatCheck(BaseWWTask):
         if sys.platform == 'win32':
             old = win32api.GetCursorPos()
         else:
-            from pynput.mouse import Controller
-            controller = Controller()
-            old = controller.position
+            old = self.executor.interaction.get_cursor_position()
         self.move(levitator.x, levitator.y)
-        abs_pos = self.executor.interaction.capture.get_abs_cords(levitator.x, levitator.y)
         if sys.platform == 'win32':
+            abs_pos = self.executor.interaction.capture.get_abs_cords(levitator.x, levitator.y)
             win32api.SetCursorPos(abs_pos)
-        else:
-            controller.position = abs_pos
         self.sleep(0.1)
         self.send_key_up(self.key_config.get('Wheel Key'))
         self.sleep(0.2)
         if sys.platform == 'win32':
             win32api.SetCursorPos(old)
         else:
-            controller.position = old
+            self.executor.interaction.restore_cursor_position(old)
         if not self.wait_feature('edge_levitator', threshold=0.6, time_out=1):
             if self.has_char(Roccia):
                 if self.find_one('levitator_roccia', threshold=0.6):
