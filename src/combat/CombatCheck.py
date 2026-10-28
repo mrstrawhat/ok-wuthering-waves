@@ -1,7 +1,10 @@
 import re
+import sys
 import time
 
-import win32api
+if sys.platform == 'win32':
+    import win32api
+
 
 from ok import find_boxes_by_name, Logger, calculate_color_percentage, TaskDisabledException
 from ok import find_color_rectangles, get_mask_in_color_range, is_pure_black
@@ -225,14 +228,25 @@ class CombatCheck(BaseWWTask):
         if not levitator:
             self.send_key_up(self.key_config.get('Wheel Key'))
             raise Exception('no levitator tool in the tab wheel!')
-        old = win32api.GetCursorPos()
+        if sys.platform == 'win32':
+            old = win32api.GetCursorPos()
+        else:
+            from pynput.mouse import Controller
+            controller = Controller()
+            old = controller.position
         self.move(levitator.x, levitator.y)
         abs_pos = self.executor.interaction.capture.get_abs_cords(levitator.x, levitator.y)
-        win32api.SetCursorPos(abs_pos)
+        if sys.platform == 'win32':
+            win32api.SetCursorPos(abs_pos)
+        else:
+            controller.position = abs_pos
         self.sleep(0.1)
         self.send_key_up(self.key_config.get('Wheel Key'))
         self.sleep(0.2)
-        win32api.SetCursorPos(old)
+        if sys.platform == 'win32':
+            win32api.SetCursorPos(old)
+        else:
+            controller.position = old
         if not self.wait_feature('edge_levitator', threshold=0.6, time_out=1):
             if self.has_char(Roccia):
                 if self.find_one('levitator_roccia', threshold=0.6):

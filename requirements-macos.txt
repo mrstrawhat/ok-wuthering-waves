@@ -1,0 +1,8 @@
+# Run from this project with OK_SCRIPT_BUILD_VERSION=2.0.15.
+# Original Qt entry point plus the local framework and native macOS backend.
+-e ../ok-script[qt,macos,ocr,default]
+mcp==2.3.0
+onnxocr-ppocrv5==0.0.22
+onnxruntime==1.31.1
+opencv-python==5.0.0.93
+Pillow==13.0.0

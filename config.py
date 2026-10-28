@@ -1,6 +1,7 @@
 import os
+import sys
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from ok import Box, ConfigOption, Icon
 from ok.util.GlobalConfig import create_basic_options
@@ -114,7 +115,7 @@ def _find_pc_exe_near_registered_path(registered_path):
 def calculate_pc_exe_path(running_path):
     if running_path is None:
         return _find_most_recently_run_pc_exe() or _find_pc_exe_from_registry()
-    game_exe_folder = Path(running_path).parents[3]
+    game_exe_folder = PureWindowsPath(running_path).parents[3]
     return str(game_exe_folder / "Wuthering Waves.exe")
 
 
@@ -293,3 +294,24 @@ config = {
     }
 
 }
+
+if sys.platform == 'darwin':
+    # Keep Windows settings intact on Windows; never load its launcher or
+    # multi-account window automation into the native macOS application.
+    config.pop('windows', None)
+    config.pop('update_pyappify', None)
+    config['updates_enabled'] = False  # No native macOS release/update channel yet.
+    config.pop('blur_area', None)  # Current live overlay is Win32-only.
+    config['use_overlay'] = False
+    config['macos'] = {'bundle_id': 'com.kurogame.mingchao', 'name': '鸣潮', 'interaction': 'Pynput'}
+    config['ocr']['params'].update(use_openvino=False, use_npu=False)
+    config['supported_resolution']['ratio'] = None
+    config['template_matching']['feature_scales'] = {
+        'btn_dialog_close': [.75, .8, .85, .9, .95, 1],
+    }
+    config['custom_tabs'] = [tab for tab in config['custom_tabs']
+                             if tab[1] != 'MultiAccountConfigTab']
+    config['onetime_tasks'] = [task for task in config['onetime_tasks']
+                              if task[1] not in ('MultiAccountDailyTask', 'MultiAccountConfigTask')]
+    config['trigger_tasks'] = [task for task in config['trigger_tasks']
+                              if task[1] != 'MouseResetTask']

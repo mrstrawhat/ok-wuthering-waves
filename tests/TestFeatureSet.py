@@ -100,6 +100,20 @@ class TestFeatureSet(unittest.TestCase):
                 box=Box(0, 0, 33, 37, name='small_search'),
             )
 
+    def test_native_mac_close_button_scales_keep_actual_click_center(self):
+        # Native Mac captures with everything except the close-button area
+        # masked out, retaining the original pixel geometry and no account data.
+        feature_set = FeatureSet(False, 'assets/coco_annotations.json', .002, .002,
+            default_threshold=.8, feature_scales={'btn_dialog_close': [.75, .8, .85, .9, .95, 1]})
+        for name, center in [('small', (2848, 98)), ('regular', (2847, 97))]:
+            with self.subTest(scale=name):
+                frame = cv2.imread(f'tests/images/macos_menu_close_{name}.png')
+                matches = feature_set.find_one_feature(frame, 'btn_dialog_close', limit=1)
+                self.assertEqual(len(matches), 1)
+                self.assertGreaterEqual(float(matches[0].confidence), .8)
+                self.assertEqual(matches[0].center(), center)
+                self.assertFalse(feature_set.find_one_feature(np.zeros_like(frame), 'btn_dialog_close', limit=1))
+
 
 if __name__ == '__main__':
     unittest.main()
