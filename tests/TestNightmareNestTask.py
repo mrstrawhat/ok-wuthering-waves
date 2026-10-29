@@ -1,6 +1,8 @@
 import unittest
 import re
+from unittest.mock import Mock
 
+from ok import TaskDisabledException
 from src.task.BaseCombatTask import CharRevivedException
 from src.task.NightmareNestTask import NestTarget, NightmareNestTask
 
@@ -186,6 +188,75 @@ class TestNightmareNestTask(unittest.TestCase):
         shifted = task._make_nest_cache_key(FakeBox('0/36', y=202), '36')
 
         self.assertEqual(first, shifted)
+
+
+class TestOutdoorCombatPreparation(unittest.TestCase):
+    def setUp(self):
+        self.task = NightmareNestTask.__new__(NightmareNestTask)
+        self.task._unreachable_nests = set()
+        self.task._nest_deaths = {}
+        self.task.ensure_main = Mock()
+        self.task.log_info = Mock()
+        self.task.get_nest_to_go = Mock(return_value=NestTarget(FakeBox('nest'), 'go_nest:36:10'))
+        self.task.click = Mock()
+        self.task.wait_feature = Mock(return_value=FakeBox('fast_travel_custom'))
+        self.task.screenshot = Mock()
+        self.task._travel_to_nest_or_skip = Mock(return_value=True)
+        self.task.run_until = Mock(return_value=True)
+        self.task.send_key_up = Mock()
+        self.task.send_key = Mock(side_effect=AssertionError('No F or item interactions allowed'))
+        self.task.combat_once = Mock(side_effect=AssertionError('Combat belongs to AutoCombatTask'))
+        self.task.click_team_challenge = Mock(side_effect=AssertionError('No dungeon entry allowed'))
+
+    def test_prepares_one_outdoor_target_without_claiming_or_combat(self):
+        result = self.task.prepare_open_world_combat()
+
+        self.assertEqual('outdoor_tacet_discord_nest', result['kind'])
+        self.assertEqual('go_nest:36:10', result['target'])
+        self.assertEqual(['go_nest', 'go_nest_scroll'], [step.__name__ for step in self.task.queues])
+        self.task.run_until.assert_called_once()
+        self.assertEqual({'time_out': 10, 'target': True, 'running': False}, self.task.run_until.call_args.kwargs)
+        self.task.send_key_up.assert_called_once_with('w')
+        self.task.send_key.assert_not_called()
+        self.task.combat_once.assert_not_called()
+        self.task.click_team_challenge.assert_not_called()
+        self.assertEqual(['auto_combat_outdoor_selected', 'auto_combat_outdoor_arrived', 'auto_combat_before'],
+                         [call.args[0] for call in self.task.screenshot.call_args_list])
+
+    def test_dungeon_target_is_refused_before_travel(self):
+        self.task.wait_feature.return_value = FakeBox('team_close')
+
+        with self.assertRaisesRegex(RuntimeError, 'dungeon'):
+            self.task.prepare_open_world_combat()
+
+        self.task._travel_to_nest_or_skip.assert_not_called()
+        self.task.run_until.assert_not_called()
+        self.task.click_team_challenge.assert_not_called()
+
+    def test_missing_target_does_not_attempt_movement(self):
+        self.task.get_nest_to_go.return_value = None
+        with self.assertRaisesRegex(RuntimeError, 'No unfinished outdoor'):
+            self.task.prepare_open_world_combat()
+        self.task.click.assert_not_called()
+        self.task.run_until.assert_not_called()
+
+    def test_failed_travel_does_not_attempt_movement(self):
+        self.task._travel_to_nest_or_skip.return_value = False
+        with self.assertRaisesRegex(RuntimeError, 'travel did not reach'):
+            self.task.prepare_open_world_combat()
+        self.task.run_until.assert_not_called()
+
+    def test_approach_timeout_releases_movement_and_fails(self):
+        self.task.run_until.return_value = False
+        with self.assertRaisesRegex(RuntimeError, '10 second'):
+            self.task.prepare_open_world_combat()
+        self.task.send_key_up.assert_called_once_with('w')
+
+    def test_cancelled_approach_releases_movement_and_propagates(self):
+        self.task.run_until.side_effect = TaskDisabledException()
+        with self.assertRaises(TaskDisabledException):
+            self.task.prepare_open_world_combat()
+        self.task.send_key_up.assert_called_once_with('w')
 
 
 if __name__ == '__main__':

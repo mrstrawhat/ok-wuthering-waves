@@ -67,6 +67,45 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
                 break
         self.ensure_main(time_out=30)
 
+    def prepare_open_world_combat(self):
+        """Prepare one outdoor nest; the active AutoCombatTask owns combat.
+
+        This deliberately does not enable/enqueue this task. Executor checks
+        remain attached to the caller, so stopping AutoCombat also stops this
+        helper. No F interaction, reward claim, or nest combat runs here.
+        """
+        self._capture_mode = False
+        self._unreachable_nests.clear()
+        self._nest_deaths.clear()
+        self.ensure_main(time_out=30)
+        self.queues = [self.go_nest, self.go_nest_scroll]
+        self.log_info('Preparing one outdoor Tacet Discord nest; not nearest-monster navigation')
+        nest = self.get_nest_to_go()
+        if nest is None:
+            raise RuntimeError('No unfinished outdoor Tacet Discord nest is available')
+        target_box = nest.box if isinstance(nest, NestTarget) else nest
+        self.click(target_box, after_sleep=2)
+        feature = self.wait_feature(TRAVEL_FEATURES + ['team_close'], time_out=10,
+                                    settle_time=0.5, raise_if_not_found=True)
+        if feature.name == 'team_close':
+            raise RuntimeError('Selected nest is a dungeon; outdoor combat preparation refused')
+        self.screenshot('auto_combat_outdoor_selected')
+        if not self._travel_to_nest_or_skip(nest):
+            raise RuntimeError('Outdoor nest travel did not reach the world')
+        self.screenshot('auto_combat_outdoor_arrived')
+        # A cancelled run_until can raise before its normal key-up; always
+        # release movement here without enabling a second task owner.
+        try:
+            entered = self.run_until(lambda: self.in_combat(target=True), 'w',
+                                     time_out=10, target=True, running=False)
+        finally:
+            self.send_key_up('w')
+        if not entered:
+            raise RuntimeError('No enemy reached within the 10 second outdoor approach limit')
+        self.screenshot('auto_combat_before')
+        cache_key = nest.cache_key if isinstance(nest, NestTarget) else 'outdoor_nest'
+        return {'kind': 'outdoor_tacet_discord_nest', 'target': cache_key}
+
     def on_combat_check(self):
         if self._capture_mode:
             self.pick_f(handle_claim=False)

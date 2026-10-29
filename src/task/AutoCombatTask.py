@@ -24,19 +24,31 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
             'Use Liberation': True,
             'Check Levitator': True,
             'Switch to Healer before and after Combat': True,
+            'Auto Approach Open World Target': False,
+            'Stop After One Combat': False,
         })
         self.config_description = {
             'Auto Target': 'Turn off to enable auto combat only when manually target enemy using middle click',
             'Use Liberation': 'Do not use Liberation in Open World to Save Time',
             'Check Levitator': 'Toggle the levitator and verify if the character is floating',
             'Switch to Healer before and after Combat': 'Better Chance to Keep Character Alive',
+            'Auto Approach Open World Target': '前往一处未完成的野外残像聚落并接敌一次；不是最近野怪寻路，不进入副本、不领取奖励。',
+            'Stop After One Combat': '一次战斗结束或中断后关闭自动战斗；不代表已确认击杀。',
         }
         self.op_index = 0
         self.char_features_warmed_up = False
+        self._approach_attempted = False
+        self._combat_failure = None
+
+    def enable(self):
+        if not self._enabled:
+            self._approach_attempted = False
+        super().enable()
 
     def disable(self):
         # The UI thread only invalidates state; the executor performs the reset.
         self._reset_combat_on_run = True
+        self._approach_attempted = False
         super().disable()
 
     def reset_auto_combat(self, reason):
@@ -61,13 +73,41 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
         if self._reset_combat_on_run:
             self.reset_auto_combat('auto combat restarted')
         try:
-            return self.run_auto_combat()
+            if self.config.get('Auto Approach Open World Target') and not self._approach_attempted:
+                # Set before calling the helper: errors must not cause the next
+                # trigger poll to navigate or teleport again.
+                self._approach_attempted = True
+                from src.task.NightmareNestTask import NightmareNestTask
+                nest_task = self.get_task_by_class(NightmareNestTask)
+                if nest_task is None:
+                    raise RuntimeError('NightmareNestTask is not registered')
+                prepared = nest_task.prepare_open_world_combat()
+                self.info_set('Open World Target', prepared)
+                self.log_info(f'Prepared outdoor nest for AutoCombatTask: {prepared}')
+            result = self.run_auto_combat()
+            if result and self.config.get('Stop After One Combat'):
+                if self._combat_failure:
+                    self.screenshot('auto_combat_failed')
+                    self.log_error(f'Combat failed: {self._combat_failure}; auto combat disabled.')
+                else:
+                    self.screenshot('auto_combat_after')
+                    self.log_info('本次战斗循环结束，自动战斗已关闭；尚未据此确认击杀。')
+                self.disable()
+            return result
         except TaskDisabledException:
             self.reset_auto_combat('auto combat disabled')
+            raise
+        except Exception:
+            if self.config.get('Auto Approach Open World Target'):
+                try:
+                    self.screenshot('auto_combat_approach_failed')
+                finally:
+                    self.disable()
             raise
 
     def run_auto_combat(self):
         self.warm_up_char_features()
+        self._combat_failure = None
         ret = False
         if not self.scene.in_team(self.in_team_and_world):
             self.reset_auto_combat('not in team and world')
@@ -85,12 +125,15 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
                     switched_to_healer = True
                 self.get_current_char().perform()
             except CharDeadException:
+                self._combat_failure = 'Characters dead'
                 self.log_error(f'Characters dead', notify=True)
                 break
             except NotInCombatException as e:
+                if 'failed switch chars' in str(e):
+                    self._combat_failure = str(e)
                 logger.info(f'auto_combat_task_out_of_combat {int(time.time() - combat_start)} {e}')
                 break
-        if ret:
+        if ret and self._combat_failure is None:
             self.combat_end()
             self.switch_healer()
         return ret

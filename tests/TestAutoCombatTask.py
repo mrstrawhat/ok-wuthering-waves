@@ -6,6 +6,7 @@ from src.char.BaseChar import BaseChar
 from src.char.CharFactory import get_char_by_pos
 from src.scene.WWScene import WWScene
 from src.task.AutoCombatTask import AutoCombatTask
+from src.task.BaseCombatTask import CharDeadException, NotInCombatException
 
 
 class TestAutoCombatTask(unittest.TestCase):
@@ -157,6 +158,91 @@ class TestAutoCombatTask(unittest.TestCase):
 
         self.assertEqual(flags, [True, True, True])
         self.assertFalse(self.task.skip_combat_check)
+
+    def test_outdoor_preparation_runs_once_across_idle_polls(self):
+        self.task.config['Auto Approach Open World Target'] = True
+        nest = Mock()
+        nest.prepare_open_world_combat.return_value = {'kind': 'outdoor_tacet_discord_nest', 'target': 'row1'}
+        self.executor.get_task_by_class.return_value = nest
+        self.task.run_auto_combat = Mock(return_value=False)
+
+        self.assertFalse(self.task.run())
+        self.assertFalse(self.task.run())
+
+        nest.prepare_open_world_combat.assert_called_once_with()
+        self.task.run_auto_combat.assert_called_with()
+        self.assertEqual(2, self.task.run_auto_combat.call_count)
+
+    def test_outdoor_preparation_failure_disables_trigger_before_next_poll(self):
+        self.task.config['Auto Approach Open World Target'] = True
+        self.task._enabled = True
+        nest = Mock()
+        nest.prepare_open_world_combat.side_effect = RuntimeError('dungeon refused')
+        self.executor.get_task_by_class.return_value = nest
+        self.task.run_auto_combat = Mock()
+        self.task.screenshot = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, 'dungeon refused'):
+            self.task.run()
+
+        self.task.screenshot.assert_called_once_with('auto_combat_approach_failed')
+        self.assertFalse(self.task._enabled)
+        self.assertFalse(self.task.config['_enabled'])
+        self.task.run_auto_combat.assert_not_called()
+
+    def test_outdoor_preparation_cancellation_propagates(self):
+        self.task.config['Auto Approach Open World Target'] = True
+        nest = Mock()
+        nest.prepare_open_world_combat.side_effect = TaskDisabledException()
+        self.executor.get_task_by_class.return_value = nest
+        self.task.run_auto_combat = Mock()
+        self.task.screenshot = Mock()
+
+        with self.assertRaises(TaskDisabledException):
+            self.task.run()
+
+        self.task.screenshot.assert_not_called()
+        self.task.run_auto_combat.assert_not_called()
+        self.assert_combat_cleared()
+
+    def test_one_combat_stop_saves_evidence_and_disables(self):
+        self.task.config['Stop After One Combat'] = True
+        self.task._enabled = True
+        self.task.run_auto_combat = Mock(return_value=True)
+        self.task.screenshot = Mock()
+
+        self.assertTrue(self.task.run())
+
+        self.task.screenshot.assert_called_once_with('auto_combat_after')
+        self.assertFalse(self.task._enabled)
+        self.assertFalse(self.task.config['_enabled'])
+
+    def test_reenable_rearms_outdoor_preparation(self):
+        self.task._enabled = False
+        self.task._approach_attempted = True
+        with patch('ok.task.task.TriggerTask.enable'):
+            self.task.enable()
+        self.assertFalse(self.task._approach_attempted)
+
+    def test_one_combat_failure_is_not_reported_as_normal_end(self):
+        for error in (CharDeadException('dead'), NotInCombatException('failed switch chars')):
+            with self.subTest(error=type(error).__name__):
+                self.setUp()
+                self.task.config['Stop After One Combat'] = True
+                self.task._enabled = True
+                self.task.in_combat = Mock(return_value=True)
+                char = Mock()
+                char.perform.side_effect = error
+                self.task.get_current_char = Mock(return_value=char)
+                self.task.screenshot = Mock()
+
+                self.assertTrue(self.task.run())
+
+                self.assertFalse(self.task._enabled)
+                self.assertIsNotNone(self.task._combat_failure)
+                self.task.screenshot.assert_called_once_with('auto_combat_failed')
+                self.task.combat_end.assert_not_called()
+                self.task.switch_healer.assert_called_once()
 
 
 if __name__ == '__main__':
