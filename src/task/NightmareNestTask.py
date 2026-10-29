@@ -80,15 +80,24 @@ class NightmareNestTask(WWOneTimeTask, BaseCombatTask):
         self.ensure_main(time_out=30)
         self.queues = [self.go_nest, self.go_nest_scroll]
         self.log_info('Preparing one outdoor Tacet Discord nest; not nearest-monster navigation')
-        nest = self.get_nest_to_go()
-        if nest is None:
-            raise RuntimeError('No unfinished outdoor Tacet Discord nest is available')
-        target_box = nest.box if isinstance(nest, NestTarget) else nest
-        self.click(target_box, after_sleep=2)
-        feature = self.wait_feature(TRAVEL_FEATURES + ['team_close'], time_out=10,
-                                    settle_time=0.5, raise_if_not_found=True)
-        if feature.name == 'team_close':
-            raise RuntimeError('Selected nest is a dungeon; outdoor combat preparation refused')
+        for attempt in range(8):
+            nest = self.get_nest_to_go()
+            if nest is None:
+                raise RuntimeError('No unfinished outdoor nest is available')
+            target_box = nest.box if isinstance(nest, NestTarget) else nest
+            self.click(target_box, after_sleep=2)
+            feature = self.wait_feature(TRAVEL_FEATURES + ['team_close'], time_out=10,
+                                        settle_time=0.5, raise_if_not_found=True)
+            if feature.name != 'team_close':
+                break
+            self.screenshot('auto_combat_skipped_dungeon')
+            if not isinstance(nest, NestTarget):
+                raise RuntimeError('Selected nest is a dungeon; outdoor combat preparation refused')
+            self._unreachable_nests.add(nest.cache_key)
+            self.log_info(f'Skip dungeon target {nest.cache_key}; searching next outdoor target')
+            self.back(after_sleep=1)
+        else:
+            raise RuntimeError('No outdoor target found within eight candidates')
         self.screenshot('auto_combat_outdoor_selected')
         if not self._travel_to_nest_or_skip(nest):
             raise RuntimeError('Outdoor nest travel did not reach the world')

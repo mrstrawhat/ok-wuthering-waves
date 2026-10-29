@@ -225,8 +225,9 @@ class TestOutdoorCombatPreparation(unittest.TestCase):
 
     def test_dungeon_target_is_refused_before_travel(self):
         self.task.wait_feature.return_value = FakeBox('team_close')
+        self.task.back = Mock()
 
-        with self.assertRaisesRegex(RuntimeError, 'dungeon'):
+        with self.assertRaisesRegex(RuntimeError, 'eight candidates'):
             self.task.prepare_open_world_combat()
 
         self.task._travel_to_nest_or_skip.assert_not_called()
