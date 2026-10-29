@@ -22,6 +22,8 @@ class TestAutoCombatTask(unittest.TestCase):
         self.task.in_world = Mock(return_value=True)
         self.task.switch_healer = Mock()
         self.task.combat_end = Mock()
+        self.task.find_one = Mock(return_value=None)
+        self.task.ocr = Mock(return_value=[])
 
     def seed_combat(self):
         old_char = BaseChar(self.task, 0, char_name='old_team')
@@ -114,6 +116,17 @@ class TestAutoCombatTask(unittest.TestCase):
 
         self.assert_combat_cleared()
         old_char.perform.assert_not_called()
+        self.task.switch_healer.assert_not_called()
+
+    def test_revive_item_dialog_is_closed_and_trigger_disabled(self):
+        self.task.in_team_and_world.return_value = False
+        self.task.ocr.return_value = ['选择复苏物品']
+        self.task.screenshot = Mock()
+        self.task.close_revive_popup = Mock()
+        self.task.disable = Mock()
+        self.assertFalse(self.task.run())
+        self.task.close_revive_popup.assert_called_once()
+        self.task.disable.assert_called_once()
         self.task.switch_healer.assert_not_called()
 
     def test_normal_polling_preserves_character_cache(self):

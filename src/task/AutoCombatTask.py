@@ -110,6 +110,15 @@ class AutoCombatTask(BaseCombatTask, TriggerTask):
         self._combat_failure = None
         ret = False
         if not self.scene.in_team(self.in_team_and_world):
+            # A dead party slot opens a consumable dialog. Never leave the
+            # trigger polling there or allow a later rotation to confirm it.
+            if self.find_one('revive_confirm_hcenter_vcenter', threshold=0.8) or self.ocr(
+                    0.16, 0.18, 0.48, 0.3,
+                    match=['选择复苏物品', '選擇復甦物品']):
+                self.screenshot('auto_combat_revive_item_refused')
+                self.close_revive_popup()
+                self.log_error('角色死亡：已关闭复苏物品窗口，停止自动战斗，不使用消耗品。')
+                self.disable()
             self.reset_auto_combat('not in team and world')
             return ret
         self.use_liberation = self.config.get('Use Liberation')
