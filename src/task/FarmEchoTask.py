@@ -1,4 +1,5 @@
 import re
+import sys
 import cv2
 import time
 
@@ -112,6 +113,8 @@ class FarmEchoTask(WWOneTimeTask, BaseCombatTask):
         return True
 
     def run(self, retries=3):
+        if sys.platform == 'darwin':
+            retries = min(retries, 1)
         # 一条龙经 run_task_by_class 调用时执行器不会设置 start_time, 每小时声骸数会按 1970 年起算而恒为 0;
         # 领奖/月卡重试会再次进入 run, 已有计数时不重新计时
         if not self.info.get('Echo Count'):
@@ -262,6 +265,8 @@ class FarmEchoTask(WWOneTimeTask, BaseCombatTask):
                 self._just_entered_boss_realm = True
             else:
                 walk_result = self.walk_after_boss_teleport()
+        except TaskDisabledException:
+            raise
         except Exception as e:
             raise RuntimeError('Teleport to boss failed') from e
 
@@ -305,7 +310,10 @@ class FarmEchoTask(WWOneTimeTask, BaseCombatTask):
         book_serial = serial_number + sum(structure[:-1]) if structure else serial_number
         is_team = self.click_on_book_target(book_serial, total_number, structure)
         if is_team:
-            if teleport_to_boss == 'Weekly Challenge':
+            # New instanced bosses can open the same level-selection page as
+            # weekly challenges instead of going straight to team selection.
+            if teleport_to_boss == 'Weekly Challenge' or self.ocr(
+                    0.6, 0.8, 1, 1, match=['单人挑战', '單人挑戰', re.compile(r'(Solo|Single).*Challenge', re.I)]):
                 self.click_configured_boss_level()
                 self.click_solo_challenge()
             self.click_team_challenge()
@@ -381,6 +389,8 @@ class FarmEchoTask(WWOneTimeTask, BaseCombatTask):
 
     def click_solo_challenge(self):
         self.click(0.880, 0.911, after_sleep=2)
+        if sys.platform == 'darwin':
+            self.screenshot('boss_entry_after_solo')
         # 结晶波片(含备用)不足时, 进队伍界面前会弹「无法获取奖励, 是否继续进入」;
         # 勾选本次登录不再提示并确认, 刷声骸不需要领奖励. 弹窗点击后立即出现, 不弹时只多等 1 秒
         self.wait_click_skip_dialog_confirm(time_out=1)

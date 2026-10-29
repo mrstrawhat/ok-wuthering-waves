@@ -56,3 +56,16 @@ def test_windows_login_wait_keeps_existing_timeout_and_recovery():
         BaseWWTask.ensure_main(task, time_out=180)
     assert task.wait_options['time_out'] == 600
     task.is_main.assert_called_once_with(esc=True)
+
+
+def test_no_reward_dialog_can_match_both_confirm_template_variants():
+    confirm, checkbox = object(), object()
+    def find(feature, **kwargs):
+        if isinstance(feature, list):
+            return None  # find_one refuses the duplicate matches.
+        return {'confirm_btn_hcenter_vcenter': confirm,
+                'confirm_btn_highlight_hcenter_vcenter': confirm,
+                'skip_dialog_check': checkbox}.get(feature)
+    task = SimpleNamespace(find_one=find, sleep=Mock(), click=Mock())
+    assert BaseWWTask.click_skip_dialog_confirm(task)
+    assert [c.args[0] for c in task.click.call_args_list] == [checkbox, confirm]

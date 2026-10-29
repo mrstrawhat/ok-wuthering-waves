@@ -427,11 +427,20 @@ class BaseWWTask(BaseTask):
     def use_stamina(self, once=60, must_use=0):
         self.sleep(1)
         current, back_up, total = self.get_stamina()
-        if current >= once * 2:
+        mac_settings = self.get_global_config('Mac 游戏设置') if sys.platform == 'darwin' else {}
+        limit = max(0, int(mac_settings.get('本次运行普通波片上限', 0)))
+        spent = getattr(og.my_app, 'mac_stamina_spent', 0) if sys.platform == 'darwin' else 0
+        remaining = max(0, limit - spent) if limit else float('inf')
+        allow_reserve = mac_settings.get('允许使用储备波片', True)
+        if remaining < once:
+            raise CannotFindException(f'普通波片消耗已达本次运行上限：{spent}/{limit}；停止结算。')
+        if not allow_reserve and current < once:
+            raise CannotFindException('普通波片不足，已禁止使用储备波片；停止结算。')
+        if current >= once * 2 and remaining >= once * 2:
             used = once * 2
             use_double = True
             logger.info(f"当前体力大于等于双倍, {current} >= {once * 2}")
-        elif must_use > once and total >= once * 2:
+        elif allow_reserve and must_use > once and total >= once * 2 and remaining >= once * 2:
             used = once * 2
             use_double = True
             logger.info(f"当前加备用大于日常剩余所需, 使用双倍, {must_use} >= {once} and {total} >= {once * 2}")
@@ -445,15 +454,24 @@ class BaseWWTask(BaseTask):
             btn = self.click_dialog_left_button()
         if self.wait_feature('gem_add_stamina', horizontal_variance=0.4, vertical_variance=0.05,
                              time_out=2, settle_time=0.5):  # 看是否需要使用备用体力
+            if not allow_reserve:
+                raise CannotFindException('出现波片补充弹窗，已禁止使用储备波片；未确认补充。')
             self.click_relative(0.70, 0.71, hcenter=True, after_sleep=1)  # 点击确认
             self.click_relative(0.70, 0.71, hcenter=True, after_sleep=1)
             self.back(after_sleep=1)
             self.click(btn, after_sleep=1)
 
+        if sys.platform == 'darwin':
+            og.my_app.mac_stamina_spent = spent + used
+            self.info_set('本次运行波片结算额度', spent + used)
+
         current -= used
         must_use -= used
         total -= used
-        if total < once:
+        if limit and remaining - used < once:
+            can_continue = False
+            self.log_info('本次运行普通波片额度已用完，停止刷取。')
+        elif total < once:
             logger.info(f"current stamina: {current} not enough to continue")
             can_continue = False
         elif must_use <= 0 and current < once:
@@ -1096,11 +1114,12 @@ class BaseWWTask(BaseTask):
             time_out=1)
 
     def click_skip_dialog_confirm(self):
-        skip_dialog_confirm = self.find_one(
-            ['confirm_btn_hcenter_vcenter', 'confirm_btn_highlight_hcenter_vcenter'],
-            horizontal_variance=0.1,
-            vertical_variance=0.1,
-        )
+        skip_dialog_confirm = None
+        for feature in ('confirm_btn_hcenter_vcenter', 'confirm_btn_highlight_hcenter_vcenter'):
+            skip_dialog_confirm = self.find_one(
+                feature, horizontal_variance=0.1, vertical_variance=0.1)
+            if skip_dialog_confirm:
+                break
         if not skip_dialog_confirm:
             return False
 

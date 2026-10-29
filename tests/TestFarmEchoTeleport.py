@@ -1,8 +1,10 @@
 import unittest
+import sys
 from unittest.mock import Mock, call, patch
 
 from src.task.FarmEchoTask import FarmEchoTask
 from src.task.WWOneTimeTask import WWOneTimeTask
+from ok import TaskDisabledException
 
 
 def make_task(config, is_team):
@@ -12,6 +14,8 @@ def make_task(config, is_team):
     task.total_weekly_number = 9
     task.total_boss_number = 20
     task.nightmare_structure = [5, 10]
+    task.ocr = Mock(return_value=[])
+    task.screenshot = Mock()
     for name in ('ensure_main', 'info_set', 'openF2Book', 'open_boss_book', 'click', 'click_configured_boss_level',
                  'click_team_challenge', 'wait_click_travel', 'wait_in_team_and_world', 'sleep'):
         setattr(task, name, Mock())
@@ -22,6 +26,23 @@ def make_task(config, is_team):
 
 
 class TestFarmEchoTeleport(unittest.TestCase):
+
+    def test_cancel_during_teleport_is_not_wrapped_as_retriable_failure(self):
+        task = make_task({}, is_team=True)
+        task.teleport_to_configured_boss = Mock(side_effect=TaskDisabledException())
+        with self.assertRaises(TaskDisabledException):
+            task.teleport_to_configured_boss_and_prepare()
+
+    def test_instanced_boss_level_page_is_handled_before_team_start(self):
+        task = make_task({'Teleport to Boss': 'Boss Challenge'}, is_team=True)
+        task.ocr.return_value = [object()]
+        task.wait_click_skip_dialog_confirm = Mock()
+        steps = Mock()
+        for name in ('click_configured_boss_level', 'click', 'click_team_challenge'):
+            steps.attach_mock(getattr(task, name), name)
+        task.teleport_to_configured_boss()
+        self.assertEqual([call.click_configured_boss_level(), call.click(0.880, 0.911, after_sleep=2),
+                          call.click_team_challenge()], steps.mock_calls)
 
     def test_special_nightmare_is_found_after_the_nightmare_nests(self):
         task = make_task({'Teleport to Boss': 'Special Nightmare', 'Which Special Nightmare to Teleport': 3},
@@ -85,7 +106,7 @@ class TestFarmEchoTeleport(unittest.TestCase):
         with patch.object(WWOneTimeTask, 'run'), self.assertRaises(RuntimeError):
             task.run()
 
-        self.assertEqual(4, task.do_run.call_count)
+        self.assertEqual(2 if sys.platform == 'darwin' else 4, task.do_run.call_count)
 
     def test_farm_continues_after_claim_popup_is_closed(self):
         task = make_task({}, is_team=True)
