@@ -1039,6 +1039,17 @@ class BaseWWTask(BaseTask):
 
     def open_boss_book(self, name, after_sleep=2):
         self.log_info(f'open_boss_book {name}')
+        if sys.platform == 'darwin' and name in ('canxiang', 'mengyan'):
+            # These rows move when the client aspect ratio or guide sections
+            # change. The old 0.83 coordinate selects Nightmare on this Mac.
+            label = (re.compile(r'残[像象]聚落|殘[像象]聚落|Tacet Discord', re.I)
+                     if name == 'canxiang' else
+                     re.compile(r'梦魇拔除|夢魘拔除|Nightmare Purification', re.I))
+            rows = self.wait_ocr(0.10, 0.12, 0.36, 0.93, match=label,
+                                 time_out=5, raise_if_not_found=True)
+            self.click(rows, after_sleep=after_sleep)
+            self.screenshot('guide_category_' + name)
+            return
         x = 0.24
         self.sleep(0.4)
         if name == 'ningsu':
